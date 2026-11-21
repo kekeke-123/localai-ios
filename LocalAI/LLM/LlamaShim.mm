@@ -225,8 +225,8 @@ static bool localai_abort_cb(void * data) {
         }
         if (added == 0) { failed = true; failure = "批处理装填失败。"; break; }
         int32_t rc = llama_process(_ctx, LLAMA_PROCESS_TYPE_DECODE, batch);
-        if (rc == 2) { failed = true; failure = @"生成被中断。"; break; }
-        if (rc < 0) { failed = true; failure = @"模型推理出错（可能是内存不足）。"; break; }
+        if (rc == 2) { failed = true; failure = "生成被中断。"; break; }
+        if (rc < 0) { failed = true; failure = "模型推理出错（可能是内存不足）。"; break; }
         if (_cancelled.load()) { break; }
     }
 
@@ -264,13 +264,13 @@ static bool localai_abort_cb(void * data) {
 
             llama_batch_ext_clear(batch);
             int32_t idx = llama_batch_ext_add_token(batch, 0, id);
-            if (idx < 0) { failed = true; failure = @"回填 token 失败。"; break; }
+            if (idx < 0) { failed = true; failure = "回填 token 失败。"; break; }
             llama_pos p = pos;
             llama_batch_ext_set_pos(batch, idx, &p);
             pos++;
 
             int32_t rc = llama_process(_ctx, LLAMA_PROCESS_TYPE_DECODE, batch);
-            if (rc < 0) { failed = true; failure = @"模型推理出错（可能是上下文用尽）。"; break; }
+            if (rc < 0) { failed = true; failure = "模型推理出错（可能是上下文用尽）。"; break; }
             if (rc == 2) { break; }
             generated++;
         }
