@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
       - name: 选择最新 Xcode
         run: |
           ls /Applications | grep -i xcode || true
-          for v in 26.2 26.1 26.0 26; do
+          for v in 26.4 26.3 26.2 26.1 26.0 26; do
             if [ -d "/Applications/Xcode_$v.app" ]; then
               sudo xcode-select -s "/Applications/Xcode_$v.app"
               break
