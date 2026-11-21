@@ -87,7 +87,7 @@ static bool localai_abort_cb(void * data) {
     // 用户问第一句话时不用再等冷启动
     {
         llama_memory_t mem = llama_get_memory(_ctx);
-        std::vector<llama_token> warm = [self tokenize:@"你好" addSpecial:true];
+        std::vector<llama_token> warm = [self tokenize:std::string("你好") addSpecial:true];
         if (!warm.empty()) {
             llama_batch_ext * wb = llama_batch_ext_init(_ctx);
             if (wb) {
