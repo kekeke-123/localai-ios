@@ -16,7 +16,7 @@ struct SiriOrb: View {
     var body: some View {
         GeometryReader { geo in
             let d = min(geo.size.width, geo.size.height)
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
                 let t = context.date.timeIntervalSinceReferenceDate
                 ZStack {
                     Circle()

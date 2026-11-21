@@ -22,6 +22,9 @@ final class ChatSession: ObservableObject {
     @Published private(set) var statusText: String = ""
     @Published var lastError: String?
 
+    private var pendingBuffer = ""
+    private var lastFlushAt = Date.distantPast
+
     private var runner: LlamaRunner?
     private var loadedSignature: String?
 
@@ -114,13 +117,20 @@ final class ChatSession: ObservableObject {
                                                    temperature: settings.temperature) { piece in
                 Task { @MainActor in
                     guard answerIndex < self.messages.count else { return }
-                    self.messages[answerIndex].text += piece
+                    self.pendingBuffer += piece
                     tokenCount += 1
+                    let now = Date()
+                    if now.timeIntervalSince(self.lastFlushAt) > 0.06 {
+                        self.lastFlushAt = now
+                        self.messages[answerIndex].text += self.pendingBuffer
+                        self.pendingBuffer = ""
+                    }
                     LiveActivityController.shared.streamTick(text: self.messages[answerIndex].text,
                                                             tokens: tokenCount,
                                                             total: settings.maxTokens)
                 }
             }
+            pendingBuffer = ""
             if answerIndex < messages.count {
                 messages[answerIndex].text = answer
                 messages[answerIndex].sources = sources

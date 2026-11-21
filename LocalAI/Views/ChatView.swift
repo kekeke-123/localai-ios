@@ -53,11 +53,18 @@ struct ChatView: View {
     private var background: some View {
         ZStack {
             Color.black
-            SiriOrb(active: voice.isRecording || session.isGenerating)
-                .frame(width: 900, height: 900)
-                .opacity(session.messages.isEmpty ? 0.16 : 0.22)
-                .blur(radius: 90)
-                .offset(y: 160)
+            if session.messages.isEmpty {
+                // 只在欢迎页画动态光球，进入对话后换成静态渐变，省 GPU
+                SiriOrb(active: voice.isRecording || session.isGenerating)
+                    .frame(width: 420, height: 420)
+                    .opacity(0.55)
+                    .blur(radius: 70)
+                    .offset(y: 120)
+            } else {
+                RadialGradient(colors: [Color(red: 0.35, green: 0.28, blue: 0.85).opacity(0.28), .clear],
+                               center: .bottom, startRadius: 10, endRadius: 520)
+                    .offset(y: 120)
+            }
             LinearGradient(colors: [.black.opacity(0.55), .clear, .black.opacity(0.75)],
                            startPoint: .top, endPoint: .bottom)
         }
