@@ -26,7 +26,7 @@ final class LlamaRunner {
 
     func countTokens(_ messages: [(role: String, content: String)]) -> Int {
         let array = messages.map { ["role": $0.role, "content": $0.content] }
-        return bridge.countTokensForMessages(array)
+        return bridge.countTokens(forMessages: array)
     }
 
     /// 同步生成，必须在后台线程调用。
