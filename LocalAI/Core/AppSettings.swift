@@ -75,13 +75,13 @@ final class AppSettings: ObservableObject {
         contextLength = c ?? 4096
         let m = d.object(forKey: Keys.maxTokens) as? Int
         maxTokens = m ?? 512
-        let stored = d.string(forKey: Keys.selectedModel)
-        if let stored, ModelCatalog.model(withID: stored) != nil {
-            selectedChatModelID = stored
-        } else {
-            // 老版本存过已下架的模型 id，直接归位到内置 0.5B
-            selectedChatModelID = ModelCatalog.chatModels[0].id
-            d.set(selectedChatModelID, forKey: Keys.selectedModel)
+        let storedModelID = d.string(forKey: Keys.selectedModel)
+        let fallbackModelID = ModelCatalog.chatModels[0].id
+        let chosenModelID = (storedModelID.flatMap { ModelCatalog.model(withID: $0) != nil ? $0 : nil }) ?? fallbackModelID
+        selectedChatModelID = chosenModelID
+        if storedModelID != chosenModelID {
+            // 老版本存过已下架的模型 id，归位到内置 0.5B
+            d.set(chosenModelID, forKey: Keys.selectedModel)
         }
         let a = d.object(forKey: Keys.autoSearch) as? Bool
         autoSearch = a ?? false
