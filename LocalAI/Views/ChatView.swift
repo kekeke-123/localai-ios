@@ -130,7 +130,7 @@ struct ChatView: View {
                     .lineLimit(1...5)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 9)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
+                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
                     .disabled(session.isGenerating)
 
                 if session.isGenerating {
@@ -178,7 +178,7 @@ struct MessageBubble: View {
                     .padding(.vertical, 10)
                     .background(
                         message.role == .user ? AnyShapeStyle(Color.accentColor.opacity(0.16))
-                                              : AnyShapeStyle(Color(.secondarySystemBackground)),
+                                              : AnyShapeStyle(Color(uiColor: .secondarySystemBackground)),
                         in: RoundedRectangle(cornerRadius: 14)
                     )
 

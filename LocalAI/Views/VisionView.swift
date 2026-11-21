@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import PhotosUI
 
 struct VisionView: View {
@@ -45,7 +46,7 @@ struct VisionView: View {
                                 Text("清除")
                                     .padding(.vertical, 11)
                                     .padding(.horizontal, 16)
-                                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+                                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
                             }
                             .buttonStyle(.plain)
                         }
@@ -154,13 +155,13 @@ struct VisionView: View {
                     Image(systemName: "doc.on.doc")
                         .padding(.vertical, 10)
                         .padding(.horizontal, 14)
-                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+                        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(16)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func loadImage(_ item: PhotosPickerItem?) {

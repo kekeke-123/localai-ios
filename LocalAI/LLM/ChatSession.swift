@@ -152,7 +152,7 @@ final class ChatSession: ObservableObject {
         var prompt: [(role: String, content: String)] = [("system", system)]
         let history = messages.filter { !$0.text.isEmpty }
         for message in history.suffix(6) {
-            prompt.append((message.role == .user ? "user" : "assistant", message.text))
+            prompt.append((role: message.role == .user ? "user" : "assistant", content: message.text))
         }
         return prompt
     }
