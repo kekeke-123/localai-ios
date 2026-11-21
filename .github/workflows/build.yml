@@ -21,6 +21,18 @@ jobs:
           xcodegen --version
           cmake --version
 
+      - name: 选择最新 Xcode
+        run: |
+          ls /Applications | grep -i xcode || true
+          for v in 26.2 26.1 26.0 26; do
+            if [ -d "/Applications/Xcode_$v.app" ]; then
+              sudo xcode-select -s "/Applications/Xcode_$v.app"
+              break
+            fi
+          done
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos || true
+
       - name: 缓存 llama.cpp 编译产物
         id: llama-cache
         uses: actions/cache@v4
@@ -77,35 +89,43 @@ jobs:
           files: LocalAI.ipa
 
   packs:
-    # 只有手动触发时才做：把视觉模型打包成 .gz 放到 models 这个 tag 下
+    # 只有手动触发时才做：把视觉模型压缩成 .gz 放到 models 这个 tag 下
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - repo: SmolVLM-256M-Instruct-GGUF
+            file: SmolVLM-256M-Instruct-Q8_0.gguf
+          - repo: SmolVLM-256M-Instruct-GGUF
+            file: mmproj-SmolVLM-256M-Instruct-Q8_0.gguf
+          - repo: SmolVLM-500M-Instruct-GGUF
+            file: SmolVLM-500M-Instruct-Q8_0.gguf
+          - repo: SmolVLM-500M-Instruct-GGUF
+            file: mmproj-SmolVLM-500M-Instruct-Q8_0.gguf
     steps:
-      - name: 安装打包工具
-        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
-
-      - name: 下载并压缩视觉模型
+      - name: 下载并压缩
         run: |
           set -e
-          mkdir -p packs
-          base=https://hf-mirror.com/ggml-org
-          fetch() {
-            echo "== $1"
-            curl -fL --retry 3 --retry-delay 3 -o "packs/$1" "$2"
-            gzip -1 -k -f "packs/$1"
-            rm "packs/$1"
-            ls -lh "packs/$1.gz"
-          }
-          fetch SmolVLM-256M-Instruct-Q8_0.gguf "$base/SmolVLM-256M-Instruct-GGUF/resolve/main/SmolVLM-256M-Instruct-Q8_0.gguf"
-          fetch mmproj-SmolVLM-256M-Instruct-Q8_0.gguf "$base/SmolVLM-256M-Instruct-GGUF/resolve/main/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf"
-          fetch SmolVLM-500M-Instruct-Q8_0.gguf "$base/SmolVLM-500M-Instruct-GGUF/resolve/main/SmolVLM-500M-Instruct-Q8_0.gguf"
-          fetch mmproj-SmolVLM-500M-Instruct-Q8_0.gguf "$base/SmolVLM-500M-Instruct-GGUF/resolve/main/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf"
+          curl -fL --retry 5 --retry-delay 5 --retry-all-errors \
+            -o "${{ matrix.file }}" \
+            "https://hf-mirror.com/ggml-org/${{ matrix.repo }}/resolve/main/${{ matrix.file }}"
+          gzip -1 -f "${{ matrix.file }}"
+          ls -lh "${{ matrix.file }}.gz"
 
-      - name: 发布模型包
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: models
-          name: 视觉模型包
-          body: |
-            压缩后的视觉模型（SmolVLM 256M / 500M）。App 下载后会在后台自动解压。
-          files: packs/*.gz
+      - name: 上传到 Release（带重试）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          gh release view models --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create models --repo "$GITHUB_REPOSITORY" --title "视觉模型包" --notes "压缩后的 SmolVLM 模型，App 下载后后台解压。"
+          for i in 1 2 3; do
+            if gh release upload models "${{ matrix.file }}.gz" --repo "$GITHUB_REPOSITORY" --clobber; then
+              echo "上传成功"; exit 0
+            fi
+            echo "第 $i 次失败，10 秒后重试"; sleep 10
+          done
+          echo "上传失败"; exit 1
