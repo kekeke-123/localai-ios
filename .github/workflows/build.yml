@@ -1,0 +1,77 @@
+name: 构建 iOS 应用
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装工具
+        run: |
+          brew install cmake xcodegen || true
+          xcodegen --version
+          cmake --version
+
+      - name: 缓存 llama.cpp 编译产物
+        id: llama-cache
+        uses: actions/cache@v4
+        with:
+          path: ThirdParty
+          key: llama-xcf-${{ runner.os }}-${{ hashFiles('scripts/build-llama-ios.sh') }}
+
+      - name: 编译 llama.cpp（iOS）
+        if: steps.llama-cache.outputs.cache-hit != 'true'
+        run: bash scripts/build-llama-ios.sh
+
+      - name: 生成 Xcode 工程
+        run: xcodegen generate
+
+      - name: 编译 App
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project LocalAI.xcodeproj \
+            -scheme LocalAI \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: 打包 IPA
+        run: |
+          set -e
+          rm -rf Payload LocalAI.ipa
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/LocalAI.app Payload/
+          zip -qry LocalAI.ipa Payload
+          ls -lh LocalAI.ipa
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalAI-ipa
+          path: LocalAI.ipa
+          retention-days: 90
+
+      - name: 发布到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: 最新构建
+          prerelease: true
+          body: |
+            自动构建的未签名 IPA。需要用 Sideloadly / AltStore / TrollStore 用自己的 Apple ID 签名后再装到 iPhone。
+            内置视觉模型 + 可下载的本地对话模型（GGUF）+ 联网搜索。
+          files: LocalAI.ipa
