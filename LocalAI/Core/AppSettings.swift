@@ -49,6 +49,11 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(autoSearch, forKey: Keys.autoSearch) }
     }
 
+    /// 当前选中的视觉模型包
+    @Published var selectedVisionPackID: String {
+        didSet { defaults.set(selectedVisionPackID, forKey: Keys.selectedVisionPack) }
+    }
+
     private let defaults = UserDefaults.standard
 
     private enum Keys {
@@ -58,6 +63,7 @@ final class AppSettings: ObservableObject {
         static let maxTokens = "llm.maxTokens"
         static let selectedModel = "llm.selectedModel"
         static let autoSearch = "web.autoSearch"
+        static let selectedVisionPack = "vlm.selectedPack"
     }
 
     init() {
@@ -72,5 +78,6 @@ final class AppSettings: ObservableObject {
         selectedChatModelID = d.string(forKey: Keys.selectedModel) ?? ModelCatalog.chatModels[0].id
         let a = d.object(forKey: Keys.autoSearch) as? Bool
         autoSearch = a ?? false
+        selectedVisionPackID = d.string(forKey: Keys.selectedVisionPack) ?? "vlm.smolvlm-256m"
     }
 }

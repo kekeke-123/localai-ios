@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct ModelsView: View {
 
     @EnvironmentObject private var store: ModelStore
+    @EnvironmentObject private var packStore: VisionPackStore
     @EnvironmentObject private var settings: AppSettings
 
     @State private var showImporter = false
@@ -29,6 +30,16 @@ struct ModelsView: View {
                     Text("对话（本地大模型）")
                 } footer: {
                     Text("模型文件保存在 App 自己的目录里，删掉 App 就一起没了。第一次使用需要联网下载一次，之后完全离线。")
+                }
+
+                Section {
+                    ForEach(VisionPacks.all) { pack in
+                        packRow(pack)
+                    }
+                } header: {
+                    Text("多模态（视觉大模型）")
+                } footer: {
+                    Text("压缩包下载后会放在后台解压，解压完才算装好；解压时可以继续用 App。装好之后识图页就能真正“看图说话”。")
                 }
 
                 Section {
@@ -129,6 +140,60 @@ struct ModelsView: View {
                 Text(error)
                     .font(.caption2)
                     .foregroundStyle(.red)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private func packRow(_ pack: VisionPack) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(pack.name).font(.headline)
+                        if settings.selectedVisionPackID == pack.id {
+                            Text("使用中")
+                                .font(.caption2)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Color.accentColor.opacity(0.16), in: Capsule())
+                        }
+                    }
+                    Text(pack.detail)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Text(pack.sizeText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if packStore.isWorking(pack) {
+                    Button("取消") { packStore.cancel(pack) }
+                        .buttonStyle(.bordered)
+                } else if packStore.isInstalled(pack) {
+                    Menu {
+                        Button("设为当前视觉模型") { settings.selectedVisionPackID = pack.id }
+                        Button("删除模型文件", role: .destructive) { packStore.remove(pack) }
+                    } label: {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    }
+                } else {
+                    Button("下载") { packStore.install(pack) }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                }
+            }
+
+            if let fraction = packStore.progress[pack.id] {
+                ProgressView(value: fraction).progressViewStyle(.linear)
+                Text(packStore.statusText[pack.id] ?? "下载中 \(Int(fraction * 100))%")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let error = packStore.errorText[pack.id] {
+                Text(error).font(.caption2).foregroundStyle(.red)
             }
         }
         .padding(.vertical, 6)

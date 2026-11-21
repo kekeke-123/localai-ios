@@ -5,6 +5,7 @@ struct ChatView: View {
     @EnvironmentObject private var session: ChatSession
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var store: ModelStore
+    @EnvironmentObject private var voice: VoiceInput
 
     @State private var showError = false
 
@@ -50,6 +51,19 @@ struct ChatView: View {
                     .padding(.bottom, 6)
                 }
 
+                if voice.isRecording {
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform")
+                            .foregroundStyle(.red)
+                        Text(voice.transcript.isEmpty ? "正在听…" : voice.transcript)
+                            .font(.footnote)
+                            .lineLimit(2)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 6)
+                }
+
                 inputBar
             }
             .navigationTitle("本地智能")
@@ -73,6 +87,16 @@ struct ChatView: View {
             }
             .onChange(of: session.lastError) { _, newValue in
                 showError = newValue != nil
+            }
+            .onChange(of: voice.isRecording) { _, isRecording in
+                if !isRecording, !voice.transcript.isEmpty {
+                    session.draft = voice.transcript
+                }
+            }
+            .onChange(of: voice.lastError) { _, newValue in
+                guard let newValue, !newValue.isEmpty else { return }
+                session.lastError = newValue
+                voice.lastError = nil
             }
         }
     }
@@ -123,7 +147,16 @@ struct ChatView: View {
                     Image(systemName: settings.autoSearch ? "globe.americas.fill" : "globe")
                         .font(.system(size: 18))
                         .foregroundStyle(settings.autoSearch ? Color.accentColor : Color.secondary)
-                        .frame(width: 34, height: 34)
+                        .frame(width: 30, height: 34)
+                }
+
+                Button {
+                    voice.toggle()
+                } label: {
+                    Image(systemName: voice.isRecording ? "mic.fill" : "mic")
+                        .font(.system(size: 18))
+                        .foregroundStyle(voice.isRecording ? Color.red : Color.secondary)
+                        .frame(width: 30, height: 34)
                 }
 
                 TextField("问点什么…", text: $session.draft, axis: .vertical)

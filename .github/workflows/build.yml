@@ -75,3 +75,37 @@ jobs:
             自动构建的未签名 IPA。需要用 Sideloadly / AltStore / TrollStore 用自己的 Apple ID 签名后再装到 iPhone。
             内置视觉模型 + 可下载的本地对话模型（GGUF）+ 联网搜索。
           files: LocalAI.ipa
+
+  packs:
+    # 只有手动触发时才做：把视觉模型打包成 .gz 放到 models 这个 tag 下
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 安装打包工具
+        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+
+      - name: 下载并压缩视觉模型
+        run: |
+          set -e
+          mkdir -p packs
+          base=https://hf-mirror.com/ggml-org
+          fetch() {
+            echo "== $1"
+            curl -fL --retry 3 --retry-delay 3 -o "packs/$1" "$2"
+            gzip -1 -k -f "packs/$1"
+            rm "packs/$1"
+            ls -lh "packs/$1.gz"
+          }
+          fetch SmolVLM-256M-Instruct-Q8_0.gguf "$base/SmolVLM-256M-Instruct-GGUF/resolve/main/SmolVLM-256M-Instruct-Q8_0.gguf"
+          fetch mmproj-SmolVLM-256M-Instruct-Q8_0.gguf "$base/SmolVLM-256M-Instruct-GGUF/resolve/main/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf"
+          fetch SmolVLM-500M-Instruct-Q8_0.gguf "$base/SmolVLM-500M-Instruct-GGUF/resolve/main/SmolVLM-500M-Instruct-Q8_0.gguf"
+          fetch mmproj-SmolVLM-500M-Instruct-Q8_0.gguf "$base/SmolVLM-500M-Instruct-GGUF/resolve/main/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf"
+
+      - name: 发布模型包
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: models
+          name: 视觉模型包
+          body: |
+            压缩后的视觉模型（SmolVLM 256M / 500M）。App 下载后会在后台自动解压。
+          files: packs/*.gz

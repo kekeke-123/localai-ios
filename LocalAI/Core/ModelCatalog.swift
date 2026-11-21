@@ -220,6 +220,35 @@ final class ModelStore: ObservableObject {
 /// 用系统下载任务，边下边报进度，比逐字节读快得多。
 final class ModelDownloadDelegate: NSObject, URLSessionDownloadDelegate {
 
+    /// 便捷入口：直接给地址和目标文件，报进度
+    static func download(url: URL,
+                         to destination: URL,
+                         progress: @escaping (Double) -> Void) async throws {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 60
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15",
+                         forHTTPHeaderField: "User-Agent")
+
+        let delegate = ModelDownloadDelegate(destination: destination, progress: progress)
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
+        try await delegate.start(session: session, request: request)
+    }
+
+    /// 探测地址是否存在（用于优先选压缩包、失败退回原文件）
+    static func probe(_ url: URL) async throws -> Bool {
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 15
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15",
+                         forHTTPHeaderField: "User-Agent")
+        let (_, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse {
+            return http.statusCode < 400
+        }
+        return false
+    }
+
     private let destination: URL
     private let progress: (Double) -> Void
     private var continuation: CheckedContinuation<Void, Error>?

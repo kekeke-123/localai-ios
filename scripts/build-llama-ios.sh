@@ -26,6 +26,8 @@ mkdir -p ThirdParty/include
 cp -R .llama.cpp/build-apple/llama.xcframework ThirdParty/llama.xcframework
 cp .llama.cpp/include/llama.h ThirdParty/include/
 cp .llama.cpp/ggml/include/*.h ThirdParty/include/
+cp .llama.cpp/tools/mtmd/mtmd.h ThirdParty/include/
+cp .llama.cpp/tools/mtmd/mtmd-helper.h ThirdParty/include/
 
 echo "==> 完成："
 ls -1 ThirdParty
