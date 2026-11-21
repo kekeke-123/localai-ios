@@ -24,6 +24,10 @@ final class LlamaRunner {
         bridge.cancel()
     }
 
+    func resetCache() {
+        bridge.resetCache()
+    }
+
     func countTokens(_ messages: [(role: String, content: String)]) -> Int {
         let array = messages.map { ["role": $0.role, "content": $0.content] }
         return bridge.countTokens(forMessages: array)

@@ -61,9 +61,11 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Text("小模 · 本地智能 1.0")
+                    Text("Siri AI · 27.0.1")
                         .font(.footnote)
-                    Text("推理引擎：llama.cpp（GGUF 模型，Metal 加速）\n识图：Apple Vision（完全离线）\n搜索：必应 / DuckDuckGo 网页版")
+                    Text(SiriPlusKernel.name + " " + SiriPlusKernel.version)
+                        .font(.footnote.weight(.semibold))
+                    Text("推理内核：\(SiriPlusKernel.tagline)\n\(SiriPlusKernel.base)\n识图：Apple Vision（完全离线）\n搜索：必应 / DuckDuckGo 网页版")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } header: {

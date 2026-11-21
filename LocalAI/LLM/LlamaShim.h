@@ -12,6 +12,9 @@ NS_ASSUME_NONNULL_BEGIN
                                  threadCount:(NSInteger)threadCount
                                  errorText:(NSString *_Nullable *_Nullable)errorText;
 
+/// 丢掉已经算好的前缀缓存（清空对话时调用）。
+- (void)resetCache;
+
 /// 请求中断当前生成（下一个 token 前生效）。
 - (void)cancel;
 

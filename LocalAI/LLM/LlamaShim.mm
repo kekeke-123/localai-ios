@@ -23,6 +23,8 @@ static bool localai_abort_cb(void * data) {
     const llama_vocab * _vocab;
     std::atomic<bool> _cancelled;
     std::atomic<bool> _busy;
+    // 已经留在 KV 缓存里的 token（Siri Plus 内核的前缀复用状态）
+    std::vector<llama_token> _cacheTokens;
 }
 
 - (nullable instancetype)initWithModelPath:(NSString *)path
@@ -80,6 +82,28 @@ static bool localai_abort_cb(void * data) {
 
     _cancelled.store(false);
     _busy.store(false);
+
+    // 预热一次：把 Metal 管线、权重页、KV 页都先摸一遍，
+    // 用户问第一句话时不用再等冷启动
+    {
+        llama_memory_t mem = llama_get_memory(_ctx);
+        std::vector<llama_token> warm = [self tokenize:@"你好" addSpecial:true];
+        if (!warm.empty()) {
+            llama_batch_ext * wb = llama_batch_ext_init(_ctx);
+            if (wb) {
+                llama_pos p = 0;
+                int32_t idx = llama_batch_ext_add_token(wb, 0, warm.front());
+                if (idx >= 0) {
+                    llama_batch_ext_set_pos(wb, idx, &p);
+                    llama_process(_ctx, LLAMA_PROCESS_TYPE_DECODE, wb);
+                }
+                llama_batch_ext_free(wb);
+            }
+        }
+        llama_memory_clear(mem, true);
+        _cacheTokens.clear();
+    }
+
     return self;
 }
 
@@ -90,6 +114,14 @@ static bool localai_abort_cb(void * data) {
 
 - (void)cancel {
     _cancelled.store(true);
+}
+
+/// 清空对话时同步丢掉前缀缓存
+- (void)resetCache {
+    if (_ctx) {
+        llama_memory_clear(llama_get_memory(_ctx), true);
+    }
+    _cacheTokens.clear();
 }
 
 #pragma mark - 提示词拼装
@@ -188,13 +220,41 @@ static bool localai_abort_cb(void * data) {
 
     // 上下文装不下时，砍掉前面一段（保留系统消息由调用方负责）
     uint32_t nCtx = llama_n_ctx(_ctx);
+    bool truncated = false;
     if ((uint32_t) tokens.size() + 64 > nCtx) {
         size_t drop = (size_t) tokens.size() + 64 - nCtx;
         if (drop >= tokens.size()) { drop = tokens.size() / 2; }
         tokens.erase(tokens.begin(), tokens.begin() + (long) drop);
+        truncated = true;
     }
 
-    llama_memory_clear(llama_get_memory(_ctx), true);
+    // —— Siri Plus 前缀复用 ——
+    // 上一轮已经把「系统提示 + 历史对话 + 上一段回答」都算进 KV 了，
+    // 这一轮只要找出公共前缀，把多出来的部分裁掉，只解码新增的 token。
+    llama_memory_t mem = llama_get_memory(_ctx);
+    if (truncated) {
+        llama_memory_clear(mem, true);
+        _cacheTokens.clear();
+    }
+
+    size_t keep = 0;
+    size_t cacheSize = _cacheTokens.size();
+    while (keep < cacheSize && keep < tokens.size() && _cacheTokens[keep] == tokens[keep]) {
+        keep++;
+    }
+    if (keep == 0) {
+        llama_memory_clear(mem, true);
+        _cacheTokens.clear();
+    } else if (keep < cacheSize) {
+        bool trimmed = llama_memory_seq_rm(mem, 0, (llama_pos) keep, -1);
+        if (!trimmed) {
+            llama_memory_clear(mem, true);
+            keep = 0;
+            _cacheTokens.clear();
+        } else {
+            _cacheTokens.resize(keep);
+        }
+    }
 
     llama_batch_ext * batch = llama_batch_ext_init(_ctx);
     if (batch == nullptr) {
@@ -204,12 +264,13 @@ static bool localai_abort_cb(void * data) {
     }
 
     int32_t nPrompt = (int32_t) tokens.size();
-    llama_pos pos = 0;
+    llama_pos pos = (llama_pos) _cacheTokens.size();
+    int32_t reuse = (int32_t) _cacheTokens.size();
     bool failed = false;
     std::string failure;
 
-    // 1) 逐批喂入提示词
-    int32_t i = 0;
+    // 1) 逐批喂入提示词（只喂 KV 里还没有的那一段）
+    int32_t i = reuse;
     while (i < nPrompt) {
         if (_cancelled.load()) { break; }
         llama_batch_ext_clear(batch);
@@ -226,11 +287,13 @@ static bool localai_abort_cb(void * data) {
         if (added == 0) { failed = true; failure = "批处理装填失败。"; break; }
         int32_t rc = llama_process(_ctx, LLAMA_PROCESS_TYPE_DECODE, batch);
         if (rc == 2) { failed = true; failure = "生成被中断。"; break; }
+        if (rc == 1) { failed = true; failure = "上下文塞满了，请先清空对话。"; break; }
         if (rc < 0) { failed = true; failure = "模型推理出错（可能是内存不足）。"; break; }
         if (_cancelled.load()) { break; }
     }
 
     NSMutableString * output = [NSMutableString string];
+    std::vector<llama_token> generatedIDs;
 
     if (!failed && !_cancelled.load()) {
         // 2) 采样循环
@@ -251,6 +314,7 @@ static bool localai_abort_cb(void * data) {
             llama_token id = llama_sampler_sample(chain, _ctx, -1);
             if (llama_vocab_is_eog(_vocab, id)) { break; }
             llama_sampler_accept(chain, id);
+            generatedIDs.push_back(id);
 
             char piece[256];
             int32_t np = llama_token_to_piece(_vocab, id, piece, (int32_t) sizeof(piece), 0, true);
@@ -278,6 +342,20 @@ static bool localai_abort_cb(void * data) {
     }
 
     llama_batch_ext_free(batch);
+
+    // 只有完整跑完才把这一轮记进缓存；中途取消/出错就作废，下次重新算
+    if (!failed && !_cancelled.load()) {
+        _cacheTokens.assign(tokens.begin(), tokens.end());
+        _cacheTokens.insert(_cacheTokens.end(), generatedIDs.begin(), generatedIDs.end());
+        if (_cacheTokens.size() > (size_t) nCtx) {
+            llama_memory_clear(mem, true);
+            _cacheTokens.clear();
+        }
+    } else {
+        llama_memory_clear(mem, true);
+        _cacheTokens.clear();
+    }
+
     _busy.store(false);
 
     if (failed) {

@@ -376,6 +376,13 @@ struct MoreView: View {
             }
             .navigationTitle("更多")
             .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) {
+                Text(SiriPlusKernel.summary)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(12)
+            }
         }
         .preferredColorScheme(.dark)
     }
