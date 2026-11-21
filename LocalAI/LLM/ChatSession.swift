@@ -99,9 +99,13 @@ final class ChatSession: ObservableObject {
 
         let prompt = buildPrompt(sources: sources)
         isGenerating = true
+        LiveActivityController.shared.start()
+
+        var tokenCount = 0
         defer {
             isGenerating = false
             statusText = ""
+            LiveActivityController.shared.end()
         }
 
         do {
@@ -111,6 +115,10 @@ final class ChatSession: ObservableObject {
                 Task { @MainActor in
                     guard answerIndex < self.messages.count else { return }
                     self.messages[answerIndex].text += piece
+                    tokenCount += 1
+                    LiveActivityController.shared.streamTick(text: self.messages[answerIndex].text,
+                                                            tokens: tokenCount,
+                                                            total: settings.maxTokens)
                 }
             }
             if answerIndex < messages.count {

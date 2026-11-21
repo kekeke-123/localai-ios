@@ -86,8 +86,7 @@ struct ChatView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.8))
                     .frame(width: 34, height: 34)
-                    .background(.ultraThinMaterial, in: Circle())
-                    .overlay(Circle().strokeBorder(.white.opacity(0.15), lineWidth: 1))
+                    .glassEffect(.regular.interactive(), in: .circle)
             }
         }
         .padding(.horizontal, 20)
@@ -176,8 +175,7 @@ struct ChatView: View {
                 .foregroundStyle(.white.opacity(0.85))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1))
+                .glassEffect(.regular, in: .capsule)
         }
         .buttonStyle(.plain)
     }

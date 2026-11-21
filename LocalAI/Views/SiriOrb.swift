@@ -75,14 +75,6 @@ struct GlassBar<Content: View>: View {
     var body: some View {
         content
             .padding(7)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(
-                Capsule().strokeBorder(
-                    LinearGradient(colors: [.white.opacity(0.35), .white.opacity(0.08)],
-                                   startPoint: .top, endPoint: .bottom),
-                    lineWidth: 1
-                )
-            )
-            .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
+            .glassEffect(.regular, in: .capsule)
     }
 }

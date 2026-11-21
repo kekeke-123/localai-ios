@@ -2,7 +2,7 @@ name: LocalAI
 options:
   bundleIdPrefix: com.keweiyi
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "26.0"
   createIntermediateGroups: true
   groupSortPosition: top
 
@@ -26,9 +26,11 @@ targets:
       - path: LocalAI
         excludes:
           - "Info.plist"
+      - path: Shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.apple.Siri
+        NSSupportsLiveActivities: "YES"
         PRODUCT_NAME: LocalAI
         INFOPLIST_FILE: LocalAI/Info.plist
         SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/LocalAI/LocalAI-Bridging-Header.h"
@@ -49,3 +51,26 @@ targets:
     dependencies:
       - framework: ThirdParty/llama.xcframework
         embed: true
+      - target: SiriWidget
+
+  SiriWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widget
+        excludes:
+          - "Info.plist"
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.apple.Siri.widget
+        PRODUCT_NAME: SiriWidget
+        INFOPLIST_FILE: Widget/Info.plist
+        MARKETING_VERSION: "27.0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: "YES"
+    dependencies:
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: ActivityKit.framework
