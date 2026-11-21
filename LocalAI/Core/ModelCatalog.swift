@@ -15,6 +15,7 @@ struct CatalogModel: Identifiable, Hashable {
     let kind: ModelKind
     let isBuiltin: Bool
     let downloadURL: String
+    let fallbackURL: String
 
     static func == (lhs: CatalogModel, rhs: CatalogModel) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
@@ -30,29 +31,54 @@ enum ModelCatalog {
         approxSize: "0 MB（系统内置）",
         kind: .vision,
         isBuiltin: true,
-        downloadURL: ""
+        downloadURL: "",
+        fallbackURL: ""
     )
 
     static let chatModels: [CatalogModel] = [
         CatalogModel(
-            id: "chat.qwen2.5-0.5b.q4",
-            name: "轻量对话模型",
-            detail: "通义千问 2.5 0.5B，4 位量化。手机上好跑，回答问题简短直接。",
+            id: "chat.qwen2.5-0.5b",
+            name: "内置 · 轻量 0.5B",
+            detail: "通义千问 2.5 0.5B，4 位量化。已经打包在 App 里，装上就能直接聊，最省内存。",
             fileName: "qwen2.5-0.5b-instruct-q4_k_m.gguf",
-            approxSize: "约 470 MB",
+            approxSize: "已内置 · 469 MB",
             kind: .chat,
-            isBuiltin: false,
-            downloadURL: "https://modelscope.cn/models/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/master/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+            isBuiltin: true,
+            downloadURL: "",
+            fallbackURL: ""
         ),
         CatalogModel(
-            id: "chat.qwen2.5-1.5b.q4",
-            name: "增强对话模型",
-            detail: "通义千问 2.5 1.5B，4 位量化。更聪明，但更吃内存、速度略慢。",
+            id: "chat.llama3.2-1b",
+            name: "内置 · 标准 1B",
+            detail: "Llama 3.2 1B，4 位量化。也打包在 App 里，比 0.5B 明显聪明，12 Pro 跑得动。",
+            fileName: "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+            approxSize: "已内置 · 770 MB",
+            kind: .chat,
+            isBuiltin: true,
+            downloadURL: "",
+            fallbackURL: ""
+        ),
+        CatalogModel(
+            id: "chat.qwen2.5-1.5b",
+            name: "可选 · 增强 1.5B",
+            detail: "通义千问 2.5 1.5B，4 位量化。回答更完整，需要额外下载，吃内存也更多。",
             fileName: "qwen2.5-1.5b-instruct-q4_k_m.gguf",
-            approxSize: "约 1.0 GB",
+            approxSize: "需下载 · 1.07 GB",
             kind: .chat,
             isBuiltin: false,
-            downloadURL: "https://modelscope.cn/models/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/master/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+            downloadURL: "https://hf-mirror.com/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+            fallbackURL: "https://modelscope.cn/models/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/master/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+        ),
+        CatalogModel(
+            id: "chat.gemma2-2b",
+            name: "可选 · 大杯 2B",
+            detail: "Gemma 2 2B，4 位量化。表达最自然，但首批加载慢、内存占用最高，建议先用内置两个试试。",
+            fileName: "gemma-2-2b-it-Q4_K_M.gguf",
+            approxSize: "需下载 · 1.63 GB",
+            kind: .chat,
+            isBuiltin: false,
+            downloadURL: "https://hf-mirror.com/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+            fallbackURL: ""
         )
     ]
 
@@ -86,9 +112,21 @@ final class ModelStore: ObservableObject {
         refresh()
     }
 
+    /// App 包里自带的模型（不用下载、不用占用户空间）
+    func bundledURL(for model: CatalogModel) -> URL? {
+        guard model.isBuiltin, !model.fileName.isEmpty else { return nil }
+        let name = (model.fileName as NSString).deletingPathExtension
+        return Bundle.main.url(forResource: name, withExtension: "gguf")
+            ?? Bundle.main.url(forResource: name, withExtension: "gguf", subdirectory: "Models")
+    }
+
     func refresh() {
         var found: [String: URL] = [:]
         for model in ModelCatalog.chatModels {
+            if let bundled = bundledURL(for: model) {
+                found[model.id] = bundled
+                continue
+            }
             let url = modelsDirectory.appendingPathComponent(model.fileName)
             if FileManager.default.fileExists(atPath: url.path) {
                 found[model.id] = url
@@ -98,7 +136,8 @@ final class ModelStore: ObservableObject {
     }
 
     func fileURL(for model: CatalogModel) -> URL {
-        modelsDirectory.appendingPathComponent(model.fileName)
+        if let bundled = bundledURL(for: model) { return bundled }
+        return modelsDirectory.appendingPathComponent(model.fileName)
     }
 
     func isDownloaded(_ model: CatalogModel) -> Bool {
@@ -124,7 +163,11 @@ final class ModelStore: ObservableObject {
 
     func download(_ model: CatalogModel) {
         guard !model.isBuiltin, !isDownloaded(model), tasks[model.id] == nil else { return }
-        guard let url = URL(string: model.downloadURL) else {
+
+        var candidates: [URL] = []
+        if let url = URL(string: model.downloadURL) { candidates.append(url) }
+        if let url = URL(string: model.fallbackURL), !model.fallbackURL.isEmpty { candidates.append(url) }
+        guard !candidates.isEmpty else {
             errorText[model.id] = "下载地址无效。"
             return
         }
@@ -136,9 +179,11 @@ final class ModelStore: ObservableObject {
         let temp = target.appendingPathExtension("part")
         try? FileManager.default.removeItem(at: temp)
 
+        let allURLs = candidates
+
         tasks[model.id] = Task { [weak self] in
             do {
-                try await ModelStore.streamDownload(from: url, to: temp) { fraction in
+                try await ModelStore.streamDownloadWithRetry(urls: allURLs, to: temp) { fraction in
                     Task { @MainActor in
                         self?.progress[model.id] = fraction
                     }
@@ -201,13 +246,39 @@ final class ModelStore: ObservableObject {
         return items.filter { $0.hasSuffix(".gguf") && !known.contains($0) }
     }
 
+    /// 多地址 + 多轮重试（网关抽风时自动换渠道、断点重来）
+    nonisolated private static func streamDownloadWithRetry(
+        urls: [URL],
+        to destination: URL,
+        progress: @escaping (Double) -> Void
+    ) async throws {
+        var lastError: Error?
+        for attempt in 0..<3 {
+            for url in urls {
+                do {
+                    try await streamDownload(from: url, to: destination, progress: progress)
+                    return
+                } catch {
+                    lastError = error
+                    try? FileManager.default.removeItem(at: destination)
+                    if Task.isCancelled { throw error }
+                }
+            }
+            if attempt < 2 {
+                try? await Task.sleep(nanoseconds: UInt64(3 * (attempt + 1)) * 1_000_000_000)
+            }
+        }
+        throw lastError ?? NSError(domain: "ModelStore", code: 2,
+                                   userInfo: [NSLocalizedDescriptionKey: "所有下载地址都失败了"])
+    }
+
     nonisolated private static func streamDownload(
         from url: URL,
         to destination: URL,
         progress: @escaping (Double) -> Void
     ) async throws {
         var request = URLRequest(url: url)
-        request.timeoutInterval = 60
+        request.timeoutInterval = 300
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
 
         let delegate = ModelDownloadDelegate(destination: destination, progress: progress)
@@ -225,7 +296,7 @@ final class ModelDownloadDelegate: NSObject, URLSessionDownloadDelegate {
                          to destination: URL,
                          progress: @escaping (Double) -> Void) async throws {
         var request = URLRequest(url: url)
-        request.timeoutInterval = 60
+        request.timeoutInterval = 300
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15",
                          forHTTPHeaderField: "User-Agent")
 

@@ -33,6 +33,19 @@ jobs:
           xcodebuild -version
           xcodebuild -showsdks | grep -i iphoneos || true
 
+      - name: 下载内置模型
+        run: |
+          set -e
+          mkdir -p LocalAI/Resources/Models
+          curl -fL --retry 5 --retry-delay 5 --retry-all-errors \
+            -o LocalAI/Resources/Models/qwen2.5-0.5b-instruct-q4_k_m.gguf \
+            "https://hf-mirror.com/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+          curl -fL --retry 5 --retry-delay 5 --retry-all-errors \
+            -o LocalAI/Resources/Models/Llama-3.2-1B-Instruct-Q4_K_M.gguf \
+            "https://hf-mirror.com/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+          ls -lh LocalAI/Resources/Models
+          du -sh LocalAI/Resources
+
       - name: 缓存 llama.cpp 编译产物
         id: llama-cache
         uses: actions/cache@v4
@@ -67,26 +80,24 @@ jobs:
           rm -rf Payload LocalAI.ipa
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/LocalAI.app Payload/
-          zip -qry LocalAI.ipa Payload
+          zip -0 -qry LocalAI.ipa Payload
           ls -lh LocalAI.ipa
 
-      - name: 上传产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: LocalAI-ipa
-          path: LocalAI.ipa
-          retention-days: 90
-
-      - name: 发布到 Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: 最新构建
-          prerelease: true
-          body: |
-            自动构建的未签名 IPA。需要用 Sideloadly / AltStore / TrollStore 用自己的 Apple ID 签名后再装到 iPhone。
-            内置视觉模型 + 可下载的本地对话模型（GGUF）+ 联网搜索。
-          files: LocalAI.ipa
+      - name: 发布到 Release（带重试）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create latest --repo "$GITHUB_REPOSITORY" --title "最新构建" --prerelease \
+              --notes "自动构建的未签名 IPA。内置 0.5B / 1B 本地模型，Siri AI 界面。"
+          for i in 1 2 3 4; do
+            if gh release upload latest LocalAI.ipa --repo "$GITHUB_REPOSITORY" --clobber; then
+              echo "上传成功"; exit 0
+            fi
+            echo "第 $i 次上传失败，20 秒后重试"; sleep 20
+          done
+          echo "上传失败"; exit 1
 
   packs:
     # 只有手动触发时才做：把视觉模型压缩成 .gz 放到 models 这个 tag 下

@@ -75,7 +75,14 @@ final class AppSettings: ObservableObject {
         contextLength = c ?? 4096
         let m = d.object(forKey: Keys.maxTokens) as? Int
         maxTokens = m ?? 512
-        selectedChatModelID = d.string(forKey: Keys.selectedModel) ?? ModelCatalog.chatModels[0].id
+        let stored = d.string(forKey: Keys.selectedModel)
+        if let stored, ModelCatalog.model(withID: stored) != nil {
+            selectedChatModelID = stored
+        } else {
+            // 老版本存过已下架的模型 id，直接归位到内置 0.5B
+            selectedChatModelID = ModelCatalog.chatModels[0].id
+            d.set(selectedChatModelID, forKey: Keys.selectedModel)
+        }
         let a = d.object(forKey: Keys.autoSearch) as? Bool
         autoSearch = a ?? false
         selectedVisionPackID = d.string(forKey: Keys.selectedVisionPack) ?? "vlm.smolvlm-256m"

@@ -7,3 +7,6 @@ DerivedData/
 Payload/
 *.ipa
 .DS_Store
+
+# 内置模型（CI 构建时才下载，不入库）
+LocalAI/Resources/
